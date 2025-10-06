@@ -1,4 +1,6 @@
-run
-.idea
 .gradle
+.idea
+.qodo
+bin
 build
+run

@@ -1,8 +1,8 @@
 {
     "schemaVersion": 1,
     "id": "windlaunch",
-    "version": "1.0.2",
-    "name": "Wind Launch Mod",
+    "version": "2.0.0",
+    "name": "Wind Launch",
     "description": "A mod that automatically launches wind charges.",
     "authors": [
       "Carloplayz"
@@ -21,9 +21,9 @@
       ]
     },
     "depends": {
-      "fabricloader": ">=0.16.13",
+      "fabricloader": ">=0.16.14",
       "fabric": "*",
-      "minecraft": "~1.21.8"
+      "minecraft": ">=1.21.8"
     }
   }
   

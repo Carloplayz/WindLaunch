@@ -6,4 +6,4 @@ pluginManagement {
         }
     }
 }
-rootProject.name = 'WindLaunchMod'
+rootProject.name = 'WindLaunch'

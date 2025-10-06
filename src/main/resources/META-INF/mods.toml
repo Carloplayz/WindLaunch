@@ -2,7 +2,7 @@ modLoader = "javafml"
 loaderVersion = "[>=34,)"
 license = "MIT"
 issueTrackerURL = "https://github.com/Carloplayz/WindLaunch/issues"
-displayName = "Wind Launch Mod"
+displayName = "Wind Launch"
 authors = ["Carloplayz"]
 description = """
 A mod that automatically launches wind charges.
@@ -10,6 +10,6 @@ A mod that automatically launches wind charges.
 
 [[mods]]
 modId = "windlaunch"
-version = "1.0.2"
-displayName = "Wind Launch Mod"
+version = "2.0.0"
+displayName = "Wind Launch"
 description = "Automatically launches wind charges."
