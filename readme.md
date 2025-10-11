@@ -1,17 +1,5 @@
 # WindLaunch Mod
 
-<p align="center">
-  <a href="https://modrinth.com/mod/windlaunch">
-    <img src="https://img.shields.io/badge/Available%20on-Modrinth-1bd96a?style=for-the-badge&logo=modrinth&scale=1.5" alt="Available on Modrinth">
-  </a>
-  <a href="https://modrinth.com/plugin/windlaunchplugin">
-    <img src="https://img.shields.io/badge/Plugin-Modrinth-1bd96a?style=for-the-badge&logo=modrinth&scale=1.5" alt="Plugin Modrinth">
-  </a>
-  <a href="https://github.com/Carloplayz/WindLaunchPlugin">
-    <img src="https://img.shields.io/badge/Plugin-GitHub-181717?style=for-the-badge&logo=github&scale=1.5" alt="Plugin GitHub">
-  </a>
-</p>
-
 # 🚨 Major Announcement: Mod Version Availability
 
 We are excited to share important updates regarding the availability of our mod!
