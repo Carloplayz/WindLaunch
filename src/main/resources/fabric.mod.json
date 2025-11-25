@@ -1,7 +1,7 @@
 {
     "schemaVersion": 1,
     "id": "windlaunch",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "name": "Wind Launch Mod",
     "description": "A mod that automatically launches wind charges.",
     "authors": [

@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.option.KeyBinding.Category;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -26,21 +27,21 @@ public class WindLaunchMod implements ClientModInitializer {
                 "key.windlaunch.launch",
                 InputUtil.Type.KEYSYM,
                 InputUtil.UNKNOWN_KEY.getCode(),
-                "category.windlaunch"
+                Category.MISC
         ));
 
         switchToMaceKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.windlaunch.switchtomace",
                 InputUtil.Type.KEYSYM,
                 InputUtil.UNKNOWN_KEY.getCode(),
-                "category.windlaunch"
+                Category.MISC
         ));
 
         autoMoveKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.windlaunch.automove",
                 InputUtil.Type.KEYSYM,
                 InputUtil.UNKNOWN_KEY.getCode(),
-                "category.windlaunch"
+                Category.MISC
         ));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
