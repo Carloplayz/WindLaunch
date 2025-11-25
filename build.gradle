@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'com.mod'
-version = '1.0.3'
+version = '1.0.4'
 base {
     archivesName.set('windlaunch')  // Correct way to set the archives base name
 }
@@ -20,10 +20,10 @@ repositories {
 }
 
 dependencies {
-    minecraft 'com.mojang:minecraft:1.21.9'
-    mappings 'net.fabricmc:yarn:1.21.9+build.1'
+    minecraft 'com.mojang:minecraft:1.21.10'
+    mappings 'net.fabricmc:yarn:1.21.10+build.3'
     modImplementation 'net.fabricmc:fabric-loader:0.18.1'
-    modImplementation 'net.fabricmc.fabric-api:fabric-api:0.134.0+1.21.9'
+    modImplementation 'net.fabricmc.fabric-api:fabric-api:0.138.3+1.21.10'
 }
 
 java {
