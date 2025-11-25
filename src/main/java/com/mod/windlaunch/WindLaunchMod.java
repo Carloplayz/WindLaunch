@@ -11,8 +11,10 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.option.KeyBinding.Category;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.item.ItemStack;
+import net.minecraft.text.Text;
 import net.minecraft.item.Items;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
@@ -58,23 +60,24 @@ public class WindLaunchMod implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         LOGGER.info("Client initializing WindLaunch");
+        Category windLaunchCategory = Category.create(Identifier.of("windlaunch", "main"));
         launchKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.windlaunch.launch",
                 InputUtil.Type.KEYSYM,
                 InputUtil.UNKNOWN_KEY.getCode(),
-                "category.windlaunch"
+                windLaunchCategory
         ));
         switchToMaceKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.windlaunch.switchtomace",
                 InputUtil.Type.KEYSYM,
                 InputUtil.UNKNOWN_KEY.getCode(),
-                "category.windlaunch"
+                windLaunchCategory
         ));
         autoMoveKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.windlaunch.automove",
                 InputUtil.Type.KEYSYM,
                 InputUtil.UNKNOWN_KEY.getCode(),
-                "category.windlaunch"
+                windLaunchCategory
         ));
         PayloadTypeRegistry.playC2S().register(HANDSHAKE_ID, HandshakePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(HANDSHAKE_ID, HandshakePayload.CODEC);
