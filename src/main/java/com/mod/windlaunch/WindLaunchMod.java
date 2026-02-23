@@ -1,5 +1,8 @@
 package com.mod.windlaunch;
 
+import java.lang.reflect.Method;
+import java.nio.file.Path;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,6 +12,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.option.KeyBinding.Category;
@@ -30,17 +34,36 @@ public class WindLaunchMod implements ClientModInitializer {
     private static KeyBinding launchKey;
     private static KeyBinding switchToMaceKey;
     private static KeyBinding autoMoveKey;
+
+    private static volatile Method minecraftClientDoItemUse;
+    private static final float PITCH_STATIONARY_DEGREES = 90.0f;
+    private static final ItemStack WIND_CHARGE_COOLDOWN_STACK = new ItemStack(Items.WIND_CHARGE);
+
     private boolean switchToMaceEnabled = true;
     private boolean autoMoveEnabled = true;
+    private Path configPath;
+
     private String priorityMessage = null;
-    private boolean multiplayerAllowed = false;
+    private int lastNoInventoryWindChargeMessageTick = Integer.MIN_VALUE;
+    private int queuedLaunchPresses = 0;
+    private int queuedWindChargeSlot = -1;
+    private int queuedMaceSlot = -1;
+
+    private enum HandshakeState {
+        UNKNOWN,
+        ALLOWED,
+        DENIED
+    }
+
     private static final byte MSG_HELLO = 1;
     private static final byte MSG_OK = 2;
     private static final byte MSG_DENY = 3;
     private static final Identifier HANDSHAKE_ID_RAW = Identifier.of("windlaunch", "handshake");
     private static final CustomPayload.Id<HandshakePayload> HANDSHAKE_ID = new CustomPayload.Id<>(HANDSHAKE_ID_RAW);
+    private HandshakeState handshakeState = HandshakeState.UNKNOWN;
     private int handshakeDelayTicks = -1;
     private int handshakeAttempts = 0;
+    private boolean missingPluginNotified = false;
 
     public record HandshakePayload(byte code) implements CustomPayload {
 
@@ -78,38 +101,56 @@ public class WindLaunchMod implements ClientModInitializer {
                 InputUtil.UNKNOWN_KEY.getCode(),
                 windLaunchCategory
         ));
+
+        configPath = FabricLoader.getInstance().getConfigDir().resolve("windlaunch.json");
+        WindLaunchConfig config = WindLaunchConfig.load(configPath);
+        switchToMaceEnabled = config.switchToMaceEnabled;
+        autoMoveEnabled = config.autoMoveEnabled;
+
         PayloadTypeRegistry.playC2S().register(HANDSHAKE_ID, HandshakePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(HANDSHAKE_ID, HandshakePayload.CODEC);
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             boolean isSingleplayer = client.isIntegratedServerRunning();
-            multiplayerAllowed = isSingleplayer;
             if (isSingleplayer) {
+                handshakeState = HandshakeState.ALLOWED;
+                handshakeDelayTicks = -1;
+                handshakeAttempts = 0;
                 LOGGER.info("Singleplayer detected: WindLaunch enabled");
-                sendActionBarMessage(client, "§aWindLaunch active (singleplayer)");
+                sendActionBarMessage(client, Text.literal("WindLaunch active (singleplayer)").formatted(Formatting.GREEN));
             } else {
                 LOGGER.info("Multiplayer detected: scheduling handshake...");
-                sendActionBarMessage(client, "§eWindLaunch checking server...");
+                handshakeState = HandshakeState.UNKNOWN;
+                missingPluginNotified = false;
+                sendActionBarMessage(client, Text.literal("WindLaunch awaiting server opt-in...").formatted(Formatting.YELLOW));
                 handshakeDelayTicks = 40;
                 handshakeAttempts = 0;
             }
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-            multiplayerAllowed = false;
+            handshakeState = HandshakeState.UNKNOWN;
             LOGGER.info("Disconnected: WindLaunch disabled");
-            sendActionBarMessage(client, "§cWindLaunch disabled");
+            sendActionBarMessage(client, Text.literal("WindLaunch disabled").formatted(Formatting.RED));
         });
         ClientPlayNetworking.registerGlobalReceiver(HANDSHAKE_ID, (payload, context) -> {
             byte code = payload.code();
             context.client().execute(() -> {
                 LOGGER.info("Received handshake code {}", code);
                 if (code == MSG_OK) {
-                    multiplayerAllowed = true;
+                    handshakeState = HandshakeState.ALLOWED;
                     LOGGER.info("Handshake OK: WindLaunch enabled");
-                    sendActionBarMessage(context.client(), "§aWindLaunch enabled by server");
+                    sendLocalChatMessage(
+                            context.client(),
+                            Text.literal("Yeeey! Seems like the the server owner is your friend. The mod shall work as intended")
+                                    .formatted(Formatting.GREEN)
+                    );
                 } else if (code == MSG_DENY) {
-                    multiplayerAllowed = false;
+                    handshakeState = HandshakeState.DENIED;
                     LOGGER.info("Handshake DENY: WindLaunch disabled");
-                    sendActionBarMessage(context.client(), "§cWindLaunch disabled by server");
+                    sendLocalChatMessage(
+                            context.client(),
+                            Text.literal("Huuuh? The server denied? Seems like you forgot to give yourself use permission. Ooor, it might be your evil server owner's work. Want revenge? Get v1 without server restrictions here: https://github.com/Carloplayz/WindLaunch/releases")
+                                    .formatted(Formatting.RED)
+                    );
                 }
             });
         });
@@ -117,80 +158,181 @@ public class WindLaunchMod implements ClientModInitializer {
             if (client.world == null || client.player == null) return;
             if (handshakeDelayTicks > 0) {
                 handshakeDelayTicks--; 
-            }else if (handshakeDelayTicks == 0 && handshakeAttempts < 5 && !multiplayerAllowed) {
+            } else if (handshakeDelayTicks == 0
+                    && handshakeAttempts < 5
+                    && handshakeState == HandshakeState.UNKNOWN) {
                 ClientPlayNetworking.send(new HandshakePayload(MSG_HELLO));
                 LOGGER.info("Sent handshake HELLO (attempt {})", handshakeAttempts + 1);
                 handshakeAttempts++;
                 handshakeDelayTicks = 40;
+            } else if (handshakeDelayTicks == 0
+                    && handshakeAttempts >= 5
+                    && handshakeState == HandshakeState.UNKNOWN
+                    && !missingPluginNotified) {
+                missingPluginNotified = true;
+                handshakeState = HandshakeState.DENIED;
+                handshakeDelayTicks = -1;
+                sendLocalChatMessage(
+                        client,
+                        Text.literal("Seems like the server doesn't have opt-in plugin installed. If this a public server you might not wanna use this mod. Though if you really want to I won't mind. Use v1 without server restrictions here: https://github.com/Carloplayz/WindLaunch/releases")
+                                .formatted(Formatting.YELLOW)
+                );
             }
+
             while (launchKey.wasPressed()) {
-                launchWindCharge(client);
+                queuedLaunchPresses++;
             }
+            processQueuedLaunch(client);
+
             while (switchToMaceKey.wasPressed()) {
                 toggleSwitchToMace(client);
             }
             while (autoMoveKey.wasPressed()) {
                 toggleAutoMove(client);
             }
+
             if (priorityMessage != null) {
-                sendActionBarMessage(client, priorityMessage);
+                sendActionBarMessage(client, Text.literal(priorityMessage));
                 priorityMessage = null;
             }
         });
     }
 
-    private void launchWindCharge(MinecraftClient client) {
-        if (client.player != null) {
-            if (!isModAllowed(client)) {
-                sendActionBarMessage(client, "§cWindLaunch blocked by server");
-                LOGGER.info("Action blocked: WindLaunch disabled by server");
-                return;
+    private void processQueuedLaunch(MinecraftClient client) {
+        if (client.player == null) {
+            queuedLaunchPresses = 0;
+            queuedWindChargeSlot = -1;
+            queuedMaceSlot = -1;
+            return;
+        }
+
+        if (queuedLaunchPresses <= 0) return;
+
+        if (!isModAllowed(client)) {
+            queuedLaunchPresses = 0;
+            setPriorityMessage("WindLaunch blocked (server opt-in required)");
+            return;
+        }
+
+        if (client.player.getItemCooldownManager().isCoolingDown(WIND_CHARGE_COOLDOWN_STACK)) {
+            queuedLaunchPresses = 0;
+            return;
+        }
+
+        int windChargeSlot = findHotbarSlot(client, Items.WIND_CHARGE);
+        if (windChargeSlot == -1) {
+            queuedLaunchPresses--;
+            setPriorityMessage("No wind charge found in hotbar");
+            return;
+        }
+
+        queuedWindChargeSlot = windChargeSlot;
+        queuedMaceSlot = findHotbarSlot(client, Items.MACE);
+        queuedLaunchPresses--;
+
+        if (client.player.isOnGround()) {
+            client.player.jump();
+        }
+
+        executeLaunchUsePhase(client);
+        queuedWindChargeSlot = -1;
+        queuedMaceSlot = -1;
+    }
+
+    private void executeLaunchUsePhase(MinecraftClient client) {
+        if (client.player == null) return;
+
+        int windChargeSlot = queuedWindChargeSlot;
+        if (windChargeSlot < 0
+                || windChargeSlot > 8
+                || client.player.getInventory().getStack(windChargeSlot).getItem() != Items.WIND_CHARGE) {
+            windChargeSlot = findHotbarSlot(client, Items.WIND_CHARGE);
+        }
+
+        if (windChargeSlot == -1) {
+            setPriorityMessage("No wind charge found in hotbar");
+            return;
+        }
+
+        int originalSelectedSlot = client.player.getInventory().getSelectedSlot();
+        client.player.getInventory().setSelectedSlot(windChargeSlot);
+
+        float currentPitch = client.player.getPitch();
+        client.player.setPitch(PITCH_STATIONARY_DEGREES);
+
+        doVanillaItemUseOrFallback(client);
+
+        client.player.setPitch(currentPitch);
+
+        if (switchToMaceEnabled && queuedMaceSlot != -1) {
+            client.player.getInventory().setSelectedSlot(queuedMaceSlot);
+        } else {
+            client.player.getInventory().setSelectedSlot(originalSelectedSlot);
+        }
+
+        if (autoMoveEnabled) {
+            moveOneWindCharge(client, windChargeSlot);
+        }
+
+        checkWindChargeInventory(client);
+    }
+
+    private static int findHotbarSlot(MinecraftClient client, net.minecraft.item.Item item) {
+        if (client.player == null) return -1;
+        int slot = -1;
+        for (int i = 0; i < 9; i++) {
+            ItemStack stack = client.player.getInventory().getStack(i);
+            if (stack.getItem() == item) {
+                slot = i;
             }
-            int windChargeSlot = -1;
-            int maceSlot = -1;
-            for (int i = 0; i < 9; i++) {
-                ItemStack stack = client.player.getInventory().getStack(i);
-                if (stack.getItem() == Items.WIND_CHARGE) {
-                    windChargeSlot = i; 
-                }else if (stack.getItem() == Items.MACE) {
-                    maceSlot = i;
-                }
+        }
+        return slot;
+    }
+
+    private static void doVanillaItemUseOrFallback(MinecraftClient client) {
+        if (!tryDoVanillaItemUse(client) && client.interactionManager != null && client.player != null) {
+            client.interactionManager.interactItem(client.player, Hand.MAIN_HAND);
+        }
+    }
+
+    private static boolean tryDoVanillaItemUse(MinecraftClient client) {
+        try {
+            Method method = minecraftClientDoItemUse;
+            if (method == null) {
+                method = MinecraftClient.class.getDeclaredMethod("doItemUse");
+                method.setAccessible(true);
+                minecraftClientDoItemUse = method;
             }
-            if (windChargeSlot != -1) {
-                LOGGER.info("Launching wind charge from slot {}", windChargeSlot);
-                client.player.getInventory().setSelectedSlot(windChargeSlot);
-                float pitch = client.player.getPitch();
-                client.player.setPitch(90);
-                client.player.jump();
-                if (client.interactionManager != null) {
-                    client.interactionManager.interactItem(client.player, Hand.MAIN_HAND);
-                }
-                client.player.setPitch(pitch);
-                if (switchToMaceEnabled && maceSlot != -1) {
-                    client.player.getInventory().setSelectedSlot(maceSlot);
-                }
-                if (autoMoveEnabled) {
-                    moveOneWindCharge(client, windChargeSlot);
-                }
-                checkWindChargeInventory(client);
-                sendActionBarMessage(client, "§bLaunched wind charge");
-            } else {
-                setPriorityMessage("§cNo wind charge found in hotbar");
-                LOGGER.info("No wind charge found in hotbar");
-            }
+            method.invoke(client);
+            return true;
+        } catch (ReflectiveOperationException ignored) {
+            return false;
         }
     }
 
     private void toggleSwitchToMace(MinecraftClient client) {
         switchToMaceEnabled = !switchToMaceEnabled;
-        sendActionBarMessage(client, switchToMaceEnabled ? "§aMace switching enabled" : "§cMace switching disabled");
+        persistConfig();
+        sendActionBarMessage(client, Text.literal(switchToMaceEnabled ? "Mace switching enabled" : "Mace switching disabled")
+                .formatted(switchToMaceEnabled ? Formatting.GREEN : Formatting.RED));
         LOGGER.info("Mace switching {}", switchToMaceEnabled ? "enabled" : "disabled");
     }
 
     private void toggleAutoMove(MinecraftClient client) {
         autoMoveEnabled = !autoMoveEnabled;
-        sendActionBarMessage(client, autoMoveEnabled ? "§aAuto move enabled" : "§cAuto move disabled");
+        persistConfig();
+        sendActionBarMessage(client, Text.literal(autoMoveEnabled ? "Auto move enabled" : "Auto move disabled")
+                .formatted(autoMoveEnabled ? Formatting.GREEN : Formatting.RED));
         LOGGER.info("Auto move {}", autoMoveEnabled ? "enabled" : "disabled");
+    }
+
+    private void persistConfig() {
+        Path path = configPath;
+        if (path == null) return;
+        WindLaunchConfig config = new WindLaunchConfig();
+        config.switchToMaceEnabled = switchToMaceEnabled;
+        config.autoMoveEnabled = autoMoveEnabled;
+        config.save(path);
     }
 
     private void moveOneWindCharge(MinecraftClient client, int targetSlot) {
@@ -205,6 +347,10 @@ public class WindLaunchMod implements ClientModInitializer {
             }
         }
         if (invSlot == -1) {
+            if (client.player.age - lastNoInventoryWindChargeMessageTick >= 40) {
+                setPriorityMessage("No wind charge found in inventory");
+                lastNoInventoryWindChargeMessageTick = client.player.age;
+            }
             return;
         }
         ItemStack targetStack = client.player.getInventory().getStack(targetSlot);
@@ -229,13 +375,19 @@ public class WindLaunchMod implements ClientModInitializer {
             }
         }
         if (total <= 32) {
-            setPriorityMessage("§eLow on wind charges: " + total + " left");
+            setPriorityMessage("Low on wind charges: " + total + " left");
         }
     }
 
-    private void sendActionBarMessage(MinecraftClient client, String message) {
+    private void sendActionBarMessage(MinecraftClient client, Text message) {
         if (client.player != null && client.world != null) {
-            client.player.sendMessage(Text.literal(message).formatted(Formatting.RESET), true);
+            client.player.sendMessage(message, true);
+        }
+    }
+
+    private void sendLocalChatMessage(MinecraftClient client, Text message) {
+        if (client.player != null && client.world != null) {
+            client.player.sendMessage(message, false);
         }
     }
 
@@ -246,7 +398,6 @@ public class WindLaunchMod implements ClientModInitializer {
     }
 
     private boolean isModAllowed(MinecraftClient client) {
-        boolean singleplayer = client.isIntegratedServerRunning();
-        return singleplayer || multiplayerAllowed;
+        return client.isIntegratedServerRunning() || handshakeState == HandshakeState.ALLOWED;
     }
 }

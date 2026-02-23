@@ -20,6 +20,7 @@ Thank you for your support and understanding!
 - **Auto-switch to Mace**: Automatically switch to a mace after launching (toggleable).
 - **Auto-move Wind Charges**: Automatically move wind charges from your inventory to your hotbar (toggleable).
 - **Low Wind Charge Warning**: Receive warnings when your wind charge supply is running low.
+- **Multiplayer Opt-in (v2)**: Version 2 is designed to work only when a server-side opt-in plugin explicitly enables it.
 
 ## Installation
 
@@ -45,12 +46,18 @@ The mod adds three new key bindings, which can be configured in the Minecraft co
 3. If enabled, the mod will automatically switch to a mace after launching.
 4. The mod will warn you when you're running low on wind charges.
 
+### Multiplayer (v2 only)
+
+- Multiplayer requires a **server opt-in plugin**. If the server does not opt in, WindLaunch actions stay disabled.
+
 ## Configuration
 
 You can toggle two main features using their respective key bindings:
 
 - **Auto-switch to Mace**: When enabled, automatically switches to a mace after launching.
 - **Auto-move Wind Charges**: When enabled, automatically moves wind charges from your inventory to your hotbar.
+
+Toggle settings persist to `config/windlaunch.json`.
 
 ## Compatibility
 
