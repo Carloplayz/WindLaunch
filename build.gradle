@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'com.mod'
-version = '2.0.3'
+version = '2.0.4'
 base {
     archivesName.set('windlaunch')
 }
