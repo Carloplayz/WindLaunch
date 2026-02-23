@@ -2,5 +2,6 @@
     "key.windlaunch.launch": "Launch Wind Charge",
     "key.windlaunch.switchtomace": "Switch To MACE Toggle",
     "key.windlaunch.automove": "Auto Move Wind Charge",
-    "category.windlaunch": "Wind Launch"
+    "category.windlaunch": "Wind Launch",
+    "key.category.windlaunch.windlaunch": "Wind Launch"
 }
