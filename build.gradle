@@ -1,16 +1,17 @@
 plugins {
-    id 'fabric-loom' version '1.15.3'
+    id 'net.fabricmc.fabric-loom' version '1.15-SNAPSHOT'
 }
 
 group = 'com.mod'
-version = '1.0.6'
+version = '1.1.0'
 base {
-    archivesName.set('windlaunch')  // Correct way to set the archives base name
+    archivesName.set('windlaunch')
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 repositories {
@@ -22,16 +23,12 @@ repositories {
 }
 
 dependencies {
-    minecraft 'com.mojang:minecraft:1.21.11'
-    mappings 'net.fabricmc:yarn:1.21.11+build.4'
-    modImplementation 'net.fabricmc:fabric-loader:0.18.4'
-    modImplementation 'net.fabricmc.fabric-api:fabric-api:0.141.2+1.21.11'
+    minecraft 'com.mojang:minecraft:26.1'
+    implementation 'net.fabricmc:fabric-loader:0.18.5'
+    implementation 'net.fabricmc.fabric-api:fabric-api:0.144.3+26.1'
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.release.set(21)
+    options.release.set(25)
 }
 
-java {
-    withSourcesJar()
-}

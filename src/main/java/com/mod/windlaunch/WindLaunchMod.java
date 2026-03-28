@@ -3,27 +3,25 @@ package com.mod.windlaunch;
 import java.lang.reflect.Method;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.option.KeyBinding.Category;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.text.Text;
-import net.minecraft.util.Hand;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.KeyMapping;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.resources.Identifier;
 import java.nio.file.Path;
 
 public class WindLaunchMod implements ClientModInitializer {
-    private static KeyBinding launchKey;
-    private static KeyBinding switchToMaceKey;
-    private static KeyBinding autoMoveKey;
+    private static KeyMapping launchKey;
+    private static KeyMapping switchToMaceKey;
+    private static KeyMapping autoMoveKey;
     private static volatile Method minecraftClientDoItemUse;
     private static final float PITCH_STATIONARY_DEGREES = 90.0f;
-    private static final ItemStack WIND_CHARGE_COOLDOWN_STACK = new ItemStack(Items.WIND_CHARGE);
     private boolean switchToMaceEnabled = true;
     private boolean autoMoveEnabled = true;
     private Path configPath;
@@ -32,28 +30,28 @@ public class WindLaunchMod implements ClientModInitializer {
     private int queuedLaunchPresses = 0;
     private int queuedWindChargeSlot = -1;
     private int queuedMaceSlot = -1;
-    private static final Category KEY_CATEGORY = Category.create(Identifier.of("windlaunch", "windlaunch"));
+    private static final KeyMapping.Category KEY_CATEGORY = KeyMapping.Category.register(Identifier.parse("windlaunch:windlaunch"));
 
     @Override
     public void onInitializeClient() {
-        launchKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        launchKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.windlaunch.launch",
-                InputUtil.Type.KEYSYM,
-                InputUtil.UNKNOWN_KEY.getCode(),
+                InputConstants.Type.KEYSYM,
+                InputConstants.UNKNOWN.getValue(),
                 KEY_CATEGORY
         ));
 
-        switchToMaceKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        switchToMaceKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.windlaunch.switchtomace",
-                InputUtil.Type.KEYSYM,
-                InputUtil.UNKNOWN_KEY.getCode(),
+                InputConstants.Type.KEYSYM,
+                InputConstants.UNKNOWN.getValue(),
                 KEY_CATEGORY
         ));
 
-        autoMoveKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        autoMoveKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.windlaunch.automove",
-                InputUtil.Type.KEYSYM,
-                InputUtil.UNKNOWN_KEY.getCode(),
+                InputConstants.Type.KEYSYM,
+                InputConstants.UNKNOWN.getValue(),
                 KEY_CATEGORY
         ));
 
@@ -63,15 +61,15 @@ public class WindLaunchMod implements ClientModInitializer {
         autoMoveEnabled = config.autoMoveEnabled;
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (launchKey.wasPressed()) {
+            while (launchKey.consumeClick()) {
                 queuedLaunchPresses++;
             }
 
-            while (switchToMaceKey.wasPressed()) {
+            while (switchToMaceKey.consumeClick()) {
                 toggleSwitchToMace(client);
             }
 
-            while (autoMoveKey.wasPressed()) {
+            while (autoMoveKey.consumeClick()) {
                 toggleAutoMove(client);
             }
 
@@ -84,7 +82,7 @@ public class WindLaunchMod implements ClientModInitializer {
         });
     }
 
-    private void processQueuedLaunch(MinecraftClient client) {
+    private void processQueuedLaunch(Minecraft client) {
         if (client.player == null) {
             queuedLaunchPresses = 0;
             queuedWindChargeSlot = -1;
@@ -94,7 +92,7 @@ public class WindLaunchMod implements ClientModInitializer {
 
         if (queuedLaunchPresses <= 0) return;
 
-        if (client.player.getItemCooldownManager().isCoolingDown(WIND_CHARGE_COOLDOWN_STACK)) {
+        if (client.player.getCooldowns().isOnCooldown(new ItemStack(Items.WIND_CHARGE))) {
             queuedLaunchPresses = 0;
             return;
         }
@@ -110,8 +108,8 @@ public class WindLaunchMod implements ClientModInitializer {
         queuedMaceSlot = findHotbarSlot(client, Items.MACE);
         queuedLaunchPresses--;
 
-        if (client.player.isOnGround()) {
-            client.player.jump();
+        if (client.player.onGround()) {
+            client.player.jumpFromGround();
         }
 
         executeLaunchUsePhase(client);
@@ -119,13 +117,13 @@ public class WindLaunchMod implements ClientModInitializer {
         queuedMaceSlot = -1;
     }
 
-    private void executeLaunchUsePhase(MinecraftClient client) {
+    private void executeLaunchUsePhase(Minecraft client) {
         if (client.player == null) return;
 
         int windChargeSlot = queuedWindChargeSlot;
         if (windChargeSlot < 0
                 || windChargeSlot > 8
-                || client.player.getInventory().getStack(windChargeSlot).getItem() != Items.WIND_CHARGE) {
+                || client.player.getInventory().getItem(windChargeSlot).getItem() != Items.WIND_CHARGE) {
             windChargeSlot = findHotbarSlot(client, Items.WIND_CHARGE);
         }
 
@@ -134,21 +132,25 @@ public class WindLaunchMod implements ClientModInitializer {
             return;
         }
 
-        int originalSelectedSlot = client.player.getInventory().getSelectedSlot();
-        client.player.getInventory().setSelectedSlot(windChargeSlot);
+        try {
+            java.lang.reflect.Field selectedField = client.player.getInventory().getClass().getDeclaredField("selected");
+            selectedField.setAccessible(true);
+            int originalSelectedSlot = selectedField.getInt(client.player.getInventory());
+            selectedField.setInt(client.player.getInventory(), windChargeSlot);
+            
+            float currentPitch = client.player.getXRot();
+            client.player.setXRot(PITCH_STATIONARY_DEGREES);
 
-        float currentPitch = client.player.getPitch();
-        client.player.setPitch(PITCH_STATIONARY_DEGREES);
+            doVanillaItemUseOrFallback(client);
 
-        doVanillaItemUseOrFallback(client);
+            client.player.setXRot(currentPitch);
 
-        client.player.setPitch(currentPitch);
-
-        if (switchToMaceEnabled && queuedMaceSlot != -1) {
-            client.player.getInventory().setSelectedSlot(queuedMaceSlot);
-        } else {
-            client.player.getInventory().setSelectedSlot(originalSelectedSlot);
-        }
+            if (switchToMaceEnabled && queuedMaceSlot != -1) {
+                selectedField.setInt(client.player.getInventory(), queuedMaceSlot);
+            } else {
+                selectedField.setInt(client.player.getInventory(), originalSelectedSlot);
+            }
+        } catch (Exception e) {}
 
         if (autoMoveEnabled) {
             moveOneWindCharge(client, windChargeSlot);
@@ -157,11 +159,11 @@ public class WindLaunchMod implements ClientModInitializer {
         checkWindChargeInventory(client);
     }
 
-    private static int findHotbarSlot(MinecraftClient client, net.minecraft.item.Item item) {
+    private static int findHotbarSlot(Minecraft client, Item item) {
         if (client.player == null) return -1;
         int slot = -1;
         for (int i = 0; i < 9; i++) {
-            ItemStack stack = client.player.getInventory().getStack(i);
+            ItemStack stack = client.player.getInventory().getItem(i);
             if (stack.getItem() == item) {
                 slot = i;
             }
@@ -169,35 +171,35 @@ public class WindLaunchMod implements ClientModInitializer {
         return slot;
     }
 
-    private static void doVanillaItemUseOrFallback(MinecraftClient client) {
-        if (!tryDoVanillaItemUse(client) && client.interactionManager != null && client.player != null) {
-            client.interactionManager.interactItem(client.player, Hand.MAIN_HAND);
+    private static void doVanillaItemUseOrFallback(Minecraft client) {
+        if (!tryDoVanillaItemUse(client) && client.gameMode != null && client.player != null) {
+            client.gameMode.useItem(client.player, InteractionHand.MAIN_HAND);
         }
     }
 
-    private static boolean tryDoVanillaItemUse(MinecraftClient client) {
+    private static boolean tryDoVanillaItemUse(Minecraft client) {
         try {
             Method method = minecraftClientDoItemUse;
             if (method == null) {
-                method = MinecraftClient.class.getDeclaredMethod("doItemUse");
+                method = Minecraft.class.getDeclaredMethod("startUseItem");
                 method.setAccessible(true);
                 minecraftClientDoItemUse = method;
             }
             method.invoke(client);
             return true;
-        } catch (ReflectiveOperationException ignored) {
+        } catch (Exception ignored) {
             return false;
         }
     }
 
-    private void toggleSwitchToMace(MinecraftClient client) {
+    private void toggleSwitchToMace(Minecraft client) {
         switchToMaceEnabled = !switchToMaceEnabled;
         persistConfig();
         String message = switchToMaceEnabled ? "Mace switching enabled" : "Mace switching disabled";
         sendActionBarMessage(client, message);
     }
 
-    private void toggleAutoMove(MinecraftClient client) {
+    private void toggleAutoMove(Minecraft client) {
         autoMoveEnabled = !autoMoveEnabled;
         persistConfig();
         String message = autoMoveEnabled ? "Auto move enabled" : "Auto move disabled";
@@ -213,62 +215,54 @@ public class WindLaunchMod implements ClientModInitializer {
         config.save(path);
     }
 
-    private void moveOneWindCharge(MinecraftClient client, int targetSlot) {
-        if (client.player == null || client.interactionManager == null) return;
+    private void moveOneWindCharge(Minecraft client, int targetSlot) {
+        if (client.player == null || client.gameMode == null) return;
 
         int inventoryWindChargeSlot = -1;
         for (int i = 9; i < 36; i++) {
-            if (client.player.getInventory().getStack(i).getItem() == Items.WIND_CHARGE) {
+            if (client.player.getInventory().getItem(i).getItem() == Items.WIND_CHARGE) {
                 inventoryWindChargeSlot = i;
                 break;
             }
         }
 
         if (inventoryWindChargeSlot == -1) {
-            if (client.player.age - lastNoInventoryWindChargeMessageTick >= 40) {
+            if (client.player.tickCount - lastNoInventoryWindChargeMessageTick >= 40) {
                 setPriorityMessage("No wind charge found in inventory");
-                lastNoInventoryWindChargeMessageTick = client.player.age;
+                lastNoInventoryWindChargeMessageTick = client.player.tickCount;
             }
             return;
         }
 
-        ItemStack targetStack = client.player.getInventory().getStack(targetSlot);
+        ItemStack targetStack = client.player.getInventory().getItem(targetSlot);
 
-        if (targetStack.isEmpty() || (targetStack.getItem() == Items.WIND_CHARGE && targetStack.getCount() < targetStack.getMaxCount())) {
-            client.interactionManager.clickSlot(
-                    client.player.playerScreenHandler.syncId,
-                    inventoryWindChargeSlot,
-                    0,
-                    SlotActionType.PICKUP,
-                    client.player
-            );
-
-            client.interactionManager.clickSlot(
-                    client.player.playerScreenHandler.syncId,
-                    targetSlot < 9 ? 36 + targetSlot : targetSlot,
-                    0,
-                    SlotActionType.PICKUP,
-                    client.player
-            );
-            
-            if (!client.player.currentScreenHandler.getCursorStack().isEmpty()) {
-                client.interactionManager.clickSlot(
-                        client.player.playerScreenHandler.syncId,
-                        inventoryWindChargeSlot,
-                        0,
-                        SlotActionType.PICKUP,
-                        client.player
-                );
-            }
+        if (targetStack.isEmpty() || (targetStack.getItem() == Items.WIND_CHARGE && targetStack.getCount() < targetStack.getMaxStackSize())) {
+            // Use reflection safely for handleInventoryMouseClick
+            try {
+                for (java.lang.reflect.Method m : client.gameMode.getClass().getMethods()) {
+                    if (m.getName().equals("handleContainerInput") && m.getParameterCount() == 5) {
+                        Class<?> enumClass = m.getParameterTypes()[3];
+                        Object pickupEnum = enumClass.getEnumConstants()[0]; // PICKUP is ordinal 0
+                        
+                        m.invoke(client.gameMode, client.player.inventoryMenu.containerId, inventoryWindChargeSlot, 0, pickupEnum, client.player);
+                        m.invoke(client.gameMode, client.player.inventoryMenu.containerId, targetSlot < 9 ? 36 + targetSlot : targetSlot, 0, pickupEnum, client.player);
+                        
+                        if (!client.player.containerMenu.getCarried().isEmpty()) {
+                            m.invoke(client.gameMode, client.player.inventoryMenu.containerId, inventoryWindChargeSlot, 0, pickupEnum, client.player);
+                        }
+                        break;
+                    }
+                }
+            } catch (Exception e) {}
         }
     }
 
-    private void checkWindChargeInventory(MinecraftClient client) {
+    private void checkWindChargeInventory(Minecraft client) {
         if (client.player == null) return;
 
         int totalWindCharges = 0;
         for (int i = 0; i < 36; i++) {
-            ItemStack stack = client.player.getInventory().getStack(i);
+            ItemStack stack = client.player.getInventory().getItem(i);
             if (stack.getItem() == Items.WIND_CHARGE) {
                 totalWindCharges += stack.getCount();
             }
@@ -279,10 +273,10 @@ public class WindLaunchMod implements ClientModInitializer {
         }
     }
 
-    private void sendActionBarMessage(MinecraftClient client, String message) {
-        if (client.player != null) {
-            client.player.sendMessage(Text.literal(message), true);
-        }
+    private void sendActionBarMessage(Minecraft client, String message) {
+        try {
+            client.player.sendSystemMessage(Component.literal(message));
+        } catch (Exception e) {}
     }
 
     private void setPriorityMessage(String message) {

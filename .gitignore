@@ -4,5 +4,7 @@
 bin
 build
 run
+logs
 local-plan-data.txt
-context.md
+GEMINI.md
+build.log
