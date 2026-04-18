@@ -1,8 +1,14 @@
 # WindLaunch Mod
 
 <p align="center">
-  <a href="https://modrinth.com/mod/windlaunch">
-    <img src="https://img.shields.io/badge/Available%20on-Modrinth-1bd96a?style=for-the-badge&logo=modrinth&scale=1.5" alt="Available on Modrinth">
+  <a href="https://modrinth.com/plugin/windlaunchplugin" target="_blank">
+    <img src="https://img.shields.io/badge/Available%20on-Modrinth-1bd96a?style=for-the-badge&logo=modrinth&scale=1.5" alt="Plugin Modrinth">
+  </a>
+  <a href="https://www.curseforge.com/minecraft/mc-mods/wind-launch" target="_blank">
+    <img src="https://img.shields.io/badge/Available%20on-CurseForge-FF681F?style=for-the-badge&logo=curseforge&scale=1.5" alt="Client Side Mod CurseForge">
+  </a>
+  <a href="https://www.curseforge.com/minecraft/bukkit-plugins/windlaunchplugin" target="_blank">
+    <img src="https://img.shields.io/badge/Plugin-CurseForge-FF681F?style=for-the-badge&logo=curseforge&scale=1.5" alt="Plugin CurseForge">
   </a>
   <a href="https://modrinth.com/plugin/windlaunchplugin">
     <img src="https://img.shields.io/badge/Plugin-Modrinth-1bd96a?style=for-the-badge&logo=modrinth&scale=1.5" alt="Plugin Modrinth">
